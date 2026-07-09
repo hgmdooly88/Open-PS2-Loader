@@ -260,11 +260,17 @@ static void usb_config_set(int result, int count, void *arg)
         DelayThread(10000);
         led[0] = led_patterns[pad][1];
         led[3] = 0;
-    } else if (ds34pad[pad].type == DS4) {
-        led[0] = rgbled_patterns[pad][1][0];
-        led[1] = rgbled_patterns[pad][1][1];
-        led[2] = rgbled_patterns[pad][1][2];
-        led[3] = 0;
+     } else if (ds34pad[pad].type == DS4) {
+        // 조이트론 스틱인 경우 정품 패드용 LED/초기화 패킷 전송을 차단하여 무한 리셋을 막습니다.
+        if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID) {
+            ds34pad[pad].status |= DS34USB_STATE_RUNNING;
+            SignalSema(ds34pad[pad].sema);
+            return; // 과부하를 주는 아래 LEDRumble 명령을 완전히 건너뛰고 함수를 종료합니다.
+        } else {
+            led[0] = rgbled_patterns[pad][1][0];
+            led[1] = rgbled_patterns[pad][1][1];
+            led[2] = rgbled_patterns[pad][1][2];
+            led[3] = 0;
     }
 
     LEDRumble(led, 0, 0, pad);
