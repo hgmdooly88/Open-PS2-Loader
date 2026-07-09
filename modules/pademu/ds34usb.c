@@ -19,6 +19,10 @@
 
 #define MAX_PADS 4
 
+// 조이트론 EX 레볼루션 V2 하드웨어 ID 정의 추가
+#define JOYTRON_VID 0x20BC
+#define JOYTRON_PID 0x5501
+
 static u8 output_01_report[] =
     {
         0x00,
@@ -90,6 +94,10 @@ int usb_probe(int devId)
     if (device->idVendor == DS34_VID && (device->idProduct == DS3_PID || device->idProduct == DS4_PID || device->idProduct == DS4_PID_SLIM))
         return 1;
 
+    // 조이트론 스틱 검사 조건 추가
+    if (device->idVendor == JOYTRON_VID && device->idProduct == JOYTRON_PID)
+        return 1;
+
     return 0;
 }
 
@@ -125,7 +133,8 @@ int usb_connect(int devId)
     config = (UsbConfigDescriptor *)UsbGetDeviceStaticDescriptor(devId, device, USB_DT_CONFIG);
     interface = (UsbInterfaceDescriptor *)((char *)config + config->bLength);
 
-    if (device->idProduct == DS3_PID) {
+    // 기존 조건문에 조이트론 조건(|| 사용)을 추가하여 DS3 타입으로 처리하도록 유도
+    if (device->idProduct == DS3_PID || (device->idVendor == JOYTRON_VID && device->idProduct == JOYTRON_PID)) {
         ds34pad[pad].type = DS3;
         epCount = interface->bNumEndpoints - 1;
     } else if (device->idProduct == GUITAR_HERO_PS3_PID) {
