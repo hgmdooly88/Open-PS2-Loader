@@ -162,6 +162,7 @@ jobs:
           delete-merged: true
 
   release:
+   if: github.repository == 'ps2homebrew/Open-PS2-Loader'
     needs: [build, build-variants, build-lang]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
