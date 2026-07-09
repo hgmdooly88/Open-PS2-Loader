@@ -129,14 +129,23 @@ int usb_connect(int devId)
 
     ds34pad[pad].controlEndp = UsbOpenEndpoint(devId, NULL);
 
+    // [최종 완성형 usb_connect 조건문 코드]
     device = (UsbDeviceDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_DEVICE);
     config = (UsbConfigDescriptor *)UsbGetDeviceStaticDescriptor(devId, device, USB_DT_CONFIG);
     interface = (UsbInterfaceDescriptor *)((char *)config + config->bLength);
 
-    // 기존 조건문에 조이트론 조건(|| 사용)을 추가하여 DS3 타입으로 처리하도록 유도
+    // 1. 소니 정품 DS3이거나, 조이트론 스틱인 경우 둘 다 이 구역으로 먼저 진입시킵니다.
     if (device->idProduct == DS3_PID || (device->idVendor == JOYTRON_VID && device->idProduct == JOYTRON_PID)) {
-        ds34pad[pad].type = DS3;
+        
+        // 중요: 조이트론 스틱인 경우, 정품 DS3 알고리즘에 묶이지 않도록 장치 타입을 '기타 호환 패드(DS4 기반 베이스)' 형식으로 우회 지정합니다.
+        if (device->idVendor == JOYTRON_VID) {
+            ds34pad[pad].type = DS4; // 드라이버 해석 베이스는 DS4로 지정
+        } else {
+            ds34pad[pad].type = DS3; // 정품은 기존대로 DS3 처리
+        }
+        
         epCount = interface->bNumEndpoints - 1;
+
     } else if (device->idProduct == GUITAR_HERO_PS3_PID) {
         ds34pad[pad].type = GUITAR_GH;
         epCount = interface->bNumEndpoints - 1;
@@ -145,7 +154,7 @@ int usb_connect(int devId)
         epCount = interface->bNumEndpoints - 1;
     } else {
         ds34pad[pad].type = DS4;
-        epCount = 20; // ds4 v2 returns interface->bNumEndpoints as 0
+        epCount = 20;
     }
 
     endpoint = (UsbEndpointDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_ENDPOINT);
