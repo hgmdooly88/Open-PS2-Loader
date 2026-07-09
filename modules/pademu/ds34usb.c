@@ -20,8 +20,8 @@
 #define MAX_PADS 4
 
 // 조이트론 EX 레볼루션 V2 하드웨어 ID 정의 추가
-#define JOYTRON_VID 0x20BC
-#define JOYTRON_PID 0x5501
+#define JOYTRON_VID 0x0079
+#define JOYTRON_PID 0x181C
 
 static u8 output_01_report[] =
     {
