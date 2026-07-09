@@ -19,9 +19,13 @@
 
 #define MAX_PADS 4
 
-// 조이트론 EX 레볼루션 V2 하드웨어 ID 정의 추가
-#define JOYTRON_VID 0x0079
-#define JOYTRON_PID 0x181C
+#define JOYTRON_VID_DI     0x20BC  // DINPUT 제조사 ID
+#define JOYTRON_PID_DI     0x5501  // DINPUT 제품 ID
+
+#define JOYTRON_VID_CS     0x0079  // 콘솔/XINPUT 제조사 ID
+#define JOYTRON_PID_CS     0x181C  // 콘솔 모드 제품 ID
+#define JOYTRON_PID_XI     0x18A1  // XINPUT 모드 제품 ID
+
 
 static u8 output_01_report[] =
     {
@@ -94,9 +98,10 @@ int usb_probe(int devId)
     if (device->idVendor == DS34_VID && (device->idProduct == DS3_PID || device->idProduct == DS4_PID || device->idProduct == DS4_PID_SLIM))
         return 1;
 
-    // 조이트론 스틱 검사 조건 추가
-    if (device->idVendor == JOYTRON_VID && device->idProduct == JOYTRON_PID)
-        return 1;
+    // 조이트론 3가지 모드 전체 검사 조건 추가
+    if (device->idVendor == JOYTRON_VID_DI && device->idProduct == JOYTRON_PID_DI) return 1;
+    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_CS) return 1;
+    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_XI) return 1;
 
     return 0;
 }
@@ -129,32 +134,27 @@ int usb_connect(int devId)
 
     ds34pad[pad].controlEndp = UsbOpenEndpoint(devId, NULL);
 
-    // [최종 완성형 usb_connect 조건문 코드]
+    // [최종 통합형 usb_connect 조건문 코드]
     device = (UsbDeviceDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_DEVICE);
     config = (UsbConfigDescriptor *)UsbGetDeviceStaticDescriptor(devId, device, USB_DT_CONFIG);
     interface = (UsbInterfaceDescriptor *)((char *)config + config->bLength);
 
-    // 1. 소니 정품 DS3이거나, 조이트론 스틱인 경우 둘 다 이 구역으로 먼저 진입시킵니다.
-    if (device->idProduct == DS3_PID || (device->idVendor == JOYTRON_VID && device->idProduct == JOYTRON_PID)) {
-        
-        // 중요: 조이트론 스틱인 경우, 정품 DS3 알고리즘에 묶이지 않도록 장치 타입을 '기타 호환 패드(DS4 기반 베이스)' 형식으로 우회 지정합니다.
-        if (device->idVendor == JOYTRON_VID) {
-            ds34pad[pad].type = DS4; // 드라이버 해석 베이스는 DS4로 지정
-        } else {
-            ds34pad[pad].type = DS3; // 정품은 기존대로 DS3 처리
-        }
-        
+    // 1. 소니 정품 듀얼쇼크 3만 기존대로 통과시킵니다.
+    if (device->idProduct == DS3_PID) {
+        ds34pad[pad].type = DS3;
         epCount = interface->bNumEndpoints - 1;
-
+        
     } else if (device->idProduct == GUITAR_HERO_PS3_PID) {
         ds34pad[pad].type = GUITAR_GH;
         epCount = interface->bNumEndpoints - 1;
     } else if (device->idProduct == ROCK_BAND_PS3_PID) {
         ds34pad[pad].type = GUITAR_RB;
         epCount = interface->bNumEndpoints - 1;
+        
     } else {
+        // 2. 정품 듀얼쇼크 4 뿐만 아니라, 조이트론의 3가지 모드 장치들까지 전부 이 구역(DS4)으로 묶어버립니다.
         ds34pad[pad].type = DS4;
-        epCount = 20;
+        epCount = 20; // 듀얼쇼크 4 드라이버 작동을 위한 필수 20바이트 버퍼 고정
     }
 
     endpoint = (UsbEndpointDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_ENDPOINT);
@@ -261,16 +261,17 @@ static void usb_config_set(int result, int count, void *arg)
         led[0] = led_patterns[pad][1];
         led[3] = 0;
      } else if (ds34pad[pad].type == DS4) {
-        // 조이트론 스틱인 경우 정품 패드용 LED/초기화 패킷 전송을 차단하여 무한 리셋을 막습니다.
-        if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID) {
+        // 연결된 기기가 조이트론의 두 가지 제조사 ID(0x20BC 또는 0x0079) 중 하나라면 리셋 방지를 위해 LED 패킷 전송을 차단
+        u16 current_vid = UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor;
+        if (current_vid == JOYTRON_VID_DI || current_vid == JOYTRON_VID_CS) {
             ds34pad[pad].status |= DS34USB_STATE_RUNNING;
             SignalSema(ds34pad[pad].sema);
-            return; // 과부하를 주는 아래 LEDRumble 명령을 완전히 건너뛰고 함수를 종료합니다.
+            return; 
         } else {
-            led[0] = rgbled_patterns[pad][1][0];
-            led[1] = rgbled_patterns[pad][1][1];
-            led[2] = rgbled_patterns[pad][1][2];
-            led[3] = 0;
+            led = rgbled_patterns[pad];
+            led = rgbled_patterns[pad];
+            led = rgbled_patterns[pad];
+            led = 0;
     }
 
     LEDRumble(led, 0, 0, pad);
