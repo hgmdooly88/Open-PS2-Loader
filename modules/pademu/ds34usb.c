@@ -261,9 +261,10 @@ static void usb_config_set(int result, int count, void *arg)
         led[0] = led_patterns[pad][1];
         led[3] = 0;
      } else if (ds34pad[pad].type == DS4) {
-        // 연결된 기기가 조이트론의 두 가지 제조사 ID(0x20BC 또는 0x0079) 중 하나라면 리셋 방지를 위해 LED 패킷 전송을 차단
-        u16 current_vid = UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor;
-        if (current_vid == JOYTRON_VID_DI || current_vid == JOYTRON_VID_CS) {
+     // 변수 선언을 제거하여 구형 컴파일러 에러를 원천 차단하고 무한 리셋을 막습니다.
+        if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
+            UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
+            
             ds34pad[pad].status |= DS34USB_STATE_RUNNING;
             SignalSema(ds34pad[pad].sema);
             return; 
@@ -272,6 +273,7 @@ static void usb_config_set(int result, int count, void *arg)
             led = rgbled_patterns[pad];
             led = rgbled_patterns[pad];
             led = 0;
+        }
     }
 
     LEDRumble(led, 0, 0, pad);
