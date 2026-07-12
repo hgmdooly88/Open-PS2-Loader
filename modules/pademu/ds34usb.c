@@ -19,6 +19,13 @@
 
 #define MAX_PADS 4
 
+// 조이트론 스틱 3가지 모드 전체 ID 정의
+#define JOYTRON_VID_DI     0x20BC  // DINPUT 제조사 ID
+#define JOYTRON_PID_DI     0x5501  // DINPUT 제품 ID
+#define JOYTRON_VID_CS     0x0079  // 콘솔/XINPUT 제조사 ID
+#define JOYTRON_PID_CS     0x181C  // 콘솔 모드 제품 ID
+#define JOYTRON_PID_XI     0x18A1  // XINPUT 모드 제품 ID
+
 static u8 output_01_report[] =
     {
         0x00,
@@ -89,6 +96,11 @@ int usb_probe(int devId)
 
     if (device->idVendor == DS34_VID && (device->idProduct == DS3_PID || device->idProduct == DS4_PID || device->idProduct == DS4_PID_SLIM))
         return 1;
+    
+    // 조이트론 3가지 모드 전체 검사 조건 수용
+    if (device->idVendor == JOYTRON_VID_DI && device->idProduct == JOYTRON_PID_DI) return 1;
+    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_CS) return 1;
+    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_XI) return 1;
 
     return 0;
 }
@@ -242,7 +254,14 @@ static void usb_config_set(int result, int count, void *arg)
         DelayThread(10000);
         led[0] = led_patterns[pad][1];
         led[3] = 0;
-    } else if (ds34pad[pad].type == DS4) {
+    } else if (ds34pad[pad].type == DS4){
+        // 무한 점멸을 방지하는 조이트론 기판 전용 예외 차단 구역
+        if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
+            UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
+            ds34pad[pad].status |= DS34USB_STATE_RUNNING;
+            SignalSema(ds34pad[pad].sema);
+            return;
+        } else {
         led[0] = rgbled_patterns[pad][1][0];
         led[1] = rgbled_patterns[pad][1][1];
         led[2] = rgbled_patterns[pad][1][2];
