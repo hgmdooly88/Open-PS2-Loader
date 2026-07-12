@@ -284,19 +284,17 @@ struct ds4report
 
 struct joytron_report
 {
-    uint8_t Buttons1;
-    uint8_t Buttons2;
-    uint8_t Hat;
+    uint8_t buttons0;
+    uint8_t buttons1;
+    uint8_t hat;
 
-    uint8_t LX;
-    uint8_t LY;
+    uint8_t lx;
+    uint8_t ly;
+    uint8_t rx;
+    uint8_t ry;
 
-    uint8_t RX;
-    uint8_t RY;
-
-    uint8_t L2;
-    uint8_t R2;
-
+    uint8_t r2;
+    uint8_t l2;
 } __attribute__((packed));
 
 /**
