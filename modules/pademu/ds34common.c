@@ -142,3 +142,5 @@ void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, u8 hav
     out->PressureL2 = in->PressureL2;
     out->PressureR2 = in->PressureR2;
 }
+
+translate_pad_joytron()
