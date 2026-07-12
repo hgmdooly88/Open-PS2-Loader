@@ -170,9 +170,16 @@ int usb_connect(int devId)
 
     } while (epCount--);
 
-    if (ds34pad[pad].interruptEndp < 0 || ds34pad[pad].outEndp < 0) {
-        usb_release(pad);
-        return 1;
+    // 만약 조이트론 스틱 모드라면, 원본 드라이버의 엄격한 엔드포인트 주소 검사 오류를 우회하여 강제로 전원을 켭니다.
+    if (device->idVendor == JOYTRON_VID_DI || device->idVendor == JOYTRON_VID_CS) {
+        if (ds34pad[pad].interruptEndp < 0) ds34pad[pad].interruptEndp = 1;
+        if (ds34pad[pad].outEndp < 0) ds34pad[pad].outEndp = 2;
+    } else {
+        // 정품 패드들은 기존 원본 방식 그대로 엄격하게 검사하여 통과시킵니다.
+        if (ds34pad[pad].interruptEndp < 0 || ds34pad[pad].outEndp < 0) {
+            usb_release(pad);
+            return 1;
+        }
     }
 
     ds34pad[pad].status |= DS34USB_STATE_CONNECTED;
