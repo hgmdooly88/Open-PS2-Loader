@@ -299,18 +299,7 @@ static void readReport(u8 *data, int pad_idx)
         translate_pad_guitar(report, &pad->ds2, pad->type == GUITAR_GH);
         padMacroPerform(&pad->ds2, report->PSButton);
     }
-    // 302번 줄: 임시 포인터 없이 OPL 1.2.0 소스코드 자체 구조에 내장된 pad_idx를 직접 활용해 잠금을 뚫어줍니다.
-    if (data || (UsbGetDeviceStaticDescriptor(ds34pad[pad_idx].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
-                 UsbGetDeviceStaticDescriptor(ds34pad[pad_idx].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS)) {
-        
-        // 조이트론 스틱일 경우 0으로 얼어있는 데이터 헤더를 표준 신호(0x01)로 리프레시합니다.
-        if (UsbGetDeviceStaticDescriptor(ds34pad[pad_idx].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
-            UsbGetDeviceStaticDescriptor(ds34pad[pad_idx].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
-            data = 0x01; 
-        }
-    }
 
-    // 기존 순정 소스코드의 하단 제어 제어 파이프라인 흐름을 정상 재개합니다.
     if (data) {
 
         if (pad->type == DS3) {
