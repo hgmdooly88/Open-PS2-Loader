@@ -22,6 +22,7 @@
 #define JOYTRON_PID_DI     0x5501  // DINPUT 제품 ID
 #define JOYTRON_VID_CS     0x0079  // 콘솔/XINPUT 제조사 ID
 #define JOYTRON_PID_CS     0x181C  // 콘솔 모드 제품 ID
+#define JOYTRON_VID_XI     0x0079  // XINPUT 제조사 ID
 #define JOYTRON_PID_XI     0x18A1  // XINPUT 모드 제품 ID
 
 static u8 output_01_report[] = {
