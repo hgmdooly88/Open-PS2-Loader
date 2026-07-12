@@ -41,7 +41,7 @@ static u8 output_01_report[] =
         0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00};
 
-static u8 led_patterns[4][2] =
+static u8 led_patterns[][2] =
     {
         {0x1C, 0x02},
         {0x1A, 0x04},
@@ -53,7 +53,7 @@ static u8 power_level[] =
     {
         0x00, 0x00, 0x02, 0x06, 0x0E, 0x1E};
 
-static u8 rgbled_patterns[4][2][3] =
+static u8 rgbled_patterns[][2][3] =
     {
         {{0x00, 0x00, 0x10}, {0x00, 0x00, 0x7F}}, // light blue/blue
         {{0x00, 0x10, 0x00}, {0x00, 0x7F, 0x00}}, // light green/green
@@ -244,7 +244,7 @@ static void usb_cmd_cb(int resultCode, int bytes, void *arg)
 static void usb_config_set(int result, int count, void *arg)
 {
     int pad = (int)arg;
-    u8 led[4];
+    u8 led;
 
     PollSema(ds34pad[pad].sema);
 
@@ -253,24 +253,24 @@ static void usb_config_set(int result, int count, void *arg)
     if (ds34pad[pad].type == DS3) {
         DS3USB_init(pad);
         DelayThread(10000);
-        led[0] = led_patterns[pad][1];
-        led[3] = 0;
+        led = led_patterns[pad][1];
+        led = 0;
     } else if (ds34pad[pad].type == DS4) {
-        // 변수 중간 선언을 차단하여 구형 컴파일러 에러를 예방하고 무한 점멸을 막는 예외 처리 구역
+        // 무한 점멸을 방지하는 조이트론 기판 전용 예외 차단 구역
         if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
             UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
             ds34pad[pad].status |= DS34USB_STATE_RUNNING;
             SignalSema(ds34pad[pad].sema);
             return;
         } else {
-            led[0] = rgbled_patterns[pad][1][0];
-            led[1] = rgbled_patterns[pad][1][1];
-            led[2] = rgbled_patterns[pad][1][2];
-            led[3] = 0;
+            led = rgbled_patterns[pad][1][0];
+            led = rgbled_patterns[pad][1][1];
+            led = rgbled_patterns[pad][1][2];
+            led = 0;
         }
     }
 
-    LEDRumble(led, 0, 0, pad);
+    LEDRumble(&led, 0, 0, pad);
 
     ds34pad[pad].status |= DS34USB_STATE_RUNNING;
 
