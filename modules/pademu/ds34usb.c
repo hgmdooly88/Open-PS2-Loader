@@ -255,13 +255,6 @@ static void usb_config_set(int result, int count, void *arg)
         led[0] = led_patterns[pad][1];
         led[3] = 0;
     } else if (ds34pad[pad].type == DS4){
-        // 무한 점멸을 방지하는 조이트론 기판 전용 예외 차단 구역
-        if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
-            UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
-            ds34pad[pad].status |= DS34USB_STATE_RUNNING;
-            SignalSema(ds34pad[pad].sema);
-            return;
-        } else {
         led[0] = rgbled_patterns[pad][1][0];
         led[1] = rgbled_patterns[pad][1][1];
         led[2] = rgbled_patterns[pad][1][2];
