@@ -19,13 +19,6 @@
 
 #define MAX_PADS 4
 
-// 조이트론 스틱 3가지 모드 전체 ID 정의
-#define JOYTRON_VID_DI     0x20BC  // DINPUT 제조사 ID
-#define JOYTRON_PID_DI     0x5501  // DINPUT 제품 ID
-#define JOYTRON_VID_CS     0x0079  // 콘솔/XINPUT 제조사 ID
-#define JOYTRON_PID_CS     0x181C  // 콘솔 모드 제품 ID
-#define JOYTRON_PID_XI     0x18A1  // XINPUT 모드 제품 ID
-
 static u8 output_01_report[] =
     {
         0x00,
@@ -97,11 +90,6 @@ int usb_probe(int devId)
     if (device->idVendor == DS34_VID && (device->idProduct == DS3_PID || device->idProduct == DS4_PID || device->idProduct == DS4_PID_SLIM))
         return 1;
 
-    // 조이트론 3가지 모드 전체 검사 조건 수용
-    if (device->idVendor == JOYTRON_VID_DI && device->idProduct == JOYTRON_PID_DI) return 1;
-    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_CS) return 1;
-    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_XI) return 1;
-
     return 0;
 }
 
@@ -147,9 +135,8 @@ int usb_connect(int devId)
         ds34pad[pad].type = GUITAR_RB;
         epCount = interface->bNumEndpoints - 1;
     } else {
-        // 정품 DS4 및 조이트론의 3가지 장치들 모두 DS4 파이프라인으로 일괄 흡수
         ds34pad[pad].type = DS4;
-        epCount = 20; 
+        epCount = 20; // ds4 v2 returns interface->bNumEndpoints as 0
     }
 
     endpoint = (UsbEndpointDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_ENDPOINT);
@@ -244,7 +231,7 @@ static void usb_cmd_cb(int resultCode, int bytes, void *arg)
 static void usb_config_set(int result, int count, void *arg)
 {
     int pad = (int)arg;
-    u8 led;
+    u8 led[4];
 
     PollSema(ds34pad[pad].sema);
 
@@ -253,24 +240,16 @@ static void usb_config_set(int result, int count, void *arg)
     if (ds34pad[pad].type == DS3) {
         DS3USB_init(pad);
         DelayThread(10000);
-        led = led_patterns[pad][1];
-        led = 0;
+        led[0] = led_patterns[pad][1];
+        led[3] = 0;
     } else if (ds34pad[pad].type == DS4) {
-        // 무한 점멸을 방지하는 조이트론 기판 전용 예외 차단 구역
-        if (UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
-            UsbGetDeviceStaticDescriptor(ds34pad[pad].devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
-            ds34pad[pad].status |= DS34USB_STATE_RUNNING;
-            SignalSema(ds34pad[pad].sema);
-            return;
-        } else {
-            led = rgbled_patterns[pad][1][0];
-            led = rgbled_patterns[pad][1][1];
-            led = rgbled_patterns[pad][1][2];
-            led = 0;
-        }
+        led[0] = rgbled_patterns[pad][1][0];
+        led[1] = rgbled_patterns[pad][1][1];
+        led[2] = rgbled_patterns[pad][1][2];
+        led[3] = 0;
     }
 
-    LEDRumble(&led, 0, 0, pad);
+    LEDRumble(led, 0, 0, pad);
 
     ds34pad[pad].status |= DS34USB_STATE_RUNNING;
 
@@ -298,16 +277,299 @@ static void readReport(u8 *data, int pad_idx)
         report = (struct ds3guitarreport *)data;
 
         translate_pad_guitar(report, &pad->ds2, pad->type == GUITAR_GH);
-        padMacroPerf(pad_idx, &pad->ds2);
-    } else {
-        u8 *report = (u8 *)data;
+        padMacroPerform(&pad->ds2, report->PSButton);
+    }
+    if (data[0]) {
 
         if (pad->type == DS3) {
-            translate_pad_ds3((struct ds3report *)report, &pad->ds2);
-        } else {
-            translate_pad_ds4((struct ds4report *)report, &pad->ds2);
+            struct ds3report *report;
+
+            report = (struct ds3report *)&data[2];
+
+            if (report->RightStickX == 0 && report->RightStickY == 0) // ledrumble cmd causes null report sometime
+                return;
+
+            pad->data[0] = ~report->ButtonStateL;
+            pad->data[1] = ~report->ButtonStateH;
+
+            translate_pad_ds3(report, &pad->ds2, 0);
+            padMacroPerform(&pad->ds2, report->PSButton);
+            if (report->PSButton) {                                    // display battery level
+                if (report->Select && (pad->btn_delay == MAX_DELAY)) { // PS + SELECT
+                    if (pad->analog_btn < 2)                           // unlocked mode
+                        pad->analog_btn = !pad->analog_btn;
+
+                    pad->oldled[0] = led_patterns[pad_idx][(pad->analog_btn & 1)];
+                    pad->btn_delay = 1;
+                } else {
+                    if (report->Power <= 0x05)
+                        pad->oldled[0] = power_level[report->Power];
+
+                    if (pad->btn_delay < MAX_DELAY)
+                        pad->btn_delay++;
+                }
+            } else {
+                pad->oldled[0] = led_patterns[pad_idx][(pad->analog_btn & 1)];
+
+                if (pad->btn_delay > 0)
+                    pad->btn_delay--;
+            }
+
+            if (report->Power == 0xEE) // charging
+                pad->oldled[3] = 1;
+            else
+                pad->oldled[3] = 0;
+
+        } else if (pad->type == DS4) {
+            struct ds4report *report;
+            report = (struct ds4report *)data;
+            translate_pad_ds4(report, &pad->ds2, 1);
+            padMacroPerform(&pad->ds2, report->PSButton);
+
+            if (report->PSButton) {                                   // display battery level
+                if (report->Share && (pad->btn_delay == MAX_DELAY)) { // PS + Share
+                    if (pad->analog_btn < 2)                          // unlocked mode
+                        pad->analog_btn = !pad->analog_btn;
+
+                    pad->oldled[0] = rgbled_patterns[pad_idx][(pad->analog_btn & 1)][0];
+                    pad->oldled[1] = rgbled_patterns[pad_idx][(pad->analog_btn & 1)][1];
+                    pad->oldled[2] = rgbled_patterns[pad_idx][(pad->analog_btn & 1)][2];
+                    pad->btn_delay = 1;
+                } else {
+                    pad->oldled[0] = report->Battery;
+                    pad->oldled[1] = 0;
+                    pad->oldled[2] = 0;
+
+                    if (pad->btn_delay < MAX_DELAY)
+                        pad->btn_delay++;
+                }
+            } else {
+                pad->oldled[0] = rgbled_patterns[pad_idx][(pad->analog_btn & 1)][0];
+                pad->oldled[1] = rgbled_patterns[pad_idx][(pad->analog_btn & 1)][1];
+                pad->oldled[2] = rgbled_patterns[pad_idx][(pad->analog_btn & 1)][2];
+
+                if (pad->btn_delay > 0)
+                    pad->btn_delay--;
+            }
+
+            if (report->Power != 0xB && report->Usb_plugged) // charging
+                pad->oldled[3] = 1;
+            else
+                pad->oldled[3] = 0;
+        }
+        if (pad->btn_delay > 0) {
+            pad->update_rum = 1;
+        }
+    }
+}
+
+static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
+{
+    int ret = 0;
+
+    PollSema(ds34pad[pad].cmd_sema);
+
+    mips_memset(usb_buf, 0, sizeof(usb_buf));
+
+    if (ds34pad[pad].type == DS3) {
+        mips_memcpy(usb_buf, output_01_report, sizeof(output_01_report));
+
+        usb_buf[1] = 0xFE; // rt
+        usb_buf[2] = rrum; // rp
+        usb_buf[3] = 0xFE; // lt
+        usb_buf[4] = lrum; // lp
+
+        usb_buf[9] = led[0] & 0x7F; // LED Conf
+
+        if (led[3]) // means charging, so blink
+        {
+            usb_buf[13] = 0x32;
+            usb_buf[18] = 0x32;
+            usb_buf[23] = 0x32;
+            usb_buf[28] = 0x32;
         }
 
-        padMacroPerf(pad_idx, &pad->ds2);
+        ret = UsbControlTransfer(ds34pad[pad].controlEndp, REQ_USB_OUT, USB_REQ_SET_REPORT, (HID_USB_SET_REPORT_OUTPUT << 8) | 0x01, 0, sizeof(output_01_report), usb_buf, usb_cmd_cb, (void *)pad);
+    } else if (ds34pad[pad].type == DS4) {
+        usb_buf[0] = 0x05;
+        usb_buf[1] = 0xFF;
+
+        usb_buf[4] = rrum * 255; // ds4 has full control
+        usb_buf[5] = lrum;
+
+        usb_buf[6] = led[0]; // r
+        usb_buf[7] = led[1]; // g
+        usb_buf[8] = led[2]; // b
+
+        if (led[3]) // means charging, so blink
+        {
+            usb_buf[9] = 0x80;  // Time to flash bright (255 = 2.5 seconds)
+            usb_buf[10] = 0x80; // Time to flash dark (255 = 2.5 seconds)
+        }
+
+        ret = UsbInterruptTransfer(ds34pad[pad].outEndp, usb_buf, 32, usb_cmd_cb, (void *)pad);
     }
+
+    ds34pad[pad].oldled[0] = led[0];
+    ds34pad[pad].oldled[1] = led[1];
+    ds34pad[pad].oldled[2] = led[2];
+    ds34pad[pad].oldled[3] = led[3];
+
+    return ret;
+}
+
+static unsigned int timeout(void *arg)
+{
+    int sema = (int)arg;
+    iSignalSema(sema);
+    return 0;
+}
+
+static void TransferWait(int sema)
+{
+    iop_sys_clock_t cmd_timeout;
+
+    cmd_timeout.lo = 200000;
+    cmd_timeout.hi = 0;
+
+    if (SetAlarm(&cmd_timeout, timeout, (void *)sema) == 0) {
+        WaitSema(sema);
+        CancelAlarm(timeout, NULL);
+    }
+}
+
+void ds34usb_set_rumble(u8 lrum, u8 rrum, int port)
+{
+    WaitSema(ds34pad[port].sema);
+
+    ds34pad[port].update_rum = 1;
+    ds34pad[port].lrum = lrum;
+    ds34pad[port].rrum = rrum;
+
+    SignalSema(ds34pad[port].sema);
+}
+
+int ds34usb_get_data(u8 *dst, int size, int port)
+{
+    int ret = 0;
+
+    WaitSema(ds34pad[port].sema);
+
+    PollSema(ds34pad[port].sema);
+
+    ret = UsbInterruptTransfer(ds34pad[port].interruptEndp, usb_buf, MAX_BUFFER_SIZE, usb_data_cb, (void *)port);
+
+    if (ret == USB_RC_OK) {
+        TransferWait(ds34pad[port].sema);
+        if (!usb_resulCode)
+            readReport(usb_buf, port);
+
+        usb_resulCode = 1;
+    } else {
+        DPRINTF("DS34USB: ds34usb_get_data usb transfer error %d\n", ret);
+    }
+
+    mips_memcpy(dst, ds34pad[port].data, size);
+    ret = ds34pad[port].analog_btn & 1;
+
+    if (ds34pad[port].update_rum) {
+        ret = LEDRumble(ds34pad[port].oldled, ds34pad[port].lrum, ds34pad[port].rrum, port);
+        if (ret == USB_RC_OK)
+            TransferWait(ds34pad[port].cmd_sema);
+        else
+            DPRINTF("DS34USB: LEDRumble usb transfer error %d\n", ret);
+
+        ds34pad[port].update_rum = 0;
+    }
+
+    SignalSema(ds34pad[port].sema);
+
+    return ret;
+}
+
+void ds34usb_set_mode(int mode, int lock, int port)
+{
+    if (lock == 3)
+        ds34pad[port].analog_btn = 3;
+    else
+        ds34pad[port].analog_btn = mode;
+}
+
+void ds34usb_reset()
+{
+    int pad;
+
+    for (pad = 0; pad < MAX_PADS; pad++)
+        usb_release(pad);
+}
+
+int ds34usb_get_status(int port)
+{
+    int ret;
+
+    WaitSema(ds34pad[port].sema);
+    ret = ds34pad[port].status;
+    SignalSema(ds34pad[port].sema);
+
+    return ret;
+}
+
+int ds34usb_get_model(int port)
+{
+    int ret;
+
+    WaitSema(ds34pad[port].sema);
+    if (ds34pad[port].type == GUITAR_GH || ds34pad[port].type == GUITAR_RB) {
+        ret = MODEL_GUITAR;
+    } else {
+        ret = MODEL_PS2;
+    }
+    SignalSema(ds34pad[port].sema);
+
+    return ret;
+}
+
+int ds34usb_init(u8 pads, u8 options)
+{
+    int pad;
+
+    for (pad = 0; pad < MAX_PADS; pad++) {
+        ds34pad[pad].status = 0;
+        ds34pad[pad].devId = -1;
+        ds34pad[pad].oldled[0] = 0;
+        ds34pad[pad].oldled[1] = 0;
+        ds34pad[pad].oldled[2] = 0;
+        ds34pad[pad].oldled[3] = 0;
+        ds34pad[pad].lrum = 0;
+        ds34pad[pad].rrum = 0;
+        ds34pad[pad].update_rum = 1;
+        ds34pad[pad].sema = -1;
+        ds34pad[pad].cmd_sema = -1;
+        ds34pad[pad].controlEndp = -1;
+        ds34pad[pad].interruptEndp = -1;
+        ds34pad[pad].enabled = (pads >> pad) & 1;
+        ds34pad[pad].type = 0;
+
+        ds34pad[pad].data[0] = 0xFF;
+        ds34pad[pad].data[1] = 0xFF;
+        ds34pad[pad].analog_btn = 0;
+
+        mips_memset(&ds34pad[pad].data[2], 0x7F, 4);
+        mips_memset(&ds34pad[pad].data[6], 0x00, 12);
+
+        ds34pad[pad].sema = CreateMutex(IOP_MUTEX_UNLOCKED);
+        ds34pad[pad].cmd_sema = CreateMutex(IOP_MUTEX_UNLOCKED);
+
+        if (ds34pad[pad].sema < 0 || ds34pad[pad].cmd_sema < 0) {
+            DPRINTF("DS34USB: Failed to allocate I/O semaphore.\n");
+            return 0;
+        }
+    }
+
+    if (UsbRegisterDriver(&usb_driver) != USB_RC_OK) {
+        DPRINTF("DS34USB: Error registering USB devices\n");
+        return 0;
+    }
+
+    return 1;
 }
