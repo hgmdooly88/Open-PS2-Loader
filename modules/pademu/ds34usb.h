@@ -7,8 +7,9 @@
 
 #define DS3       0
 #define DS4       1
-#define GUITAR_GH 2
-#define GUITAR_RB 3
+#define JOYTRON   2
+#define GUITAR_GH 3
+#define GUITAR_RB 4
 
 #define MODEL_GUITAR 1
 #define MODEL_PS2    3
@@ -25,7 +26,7 @@ typedef struct _usb_ds34
     int outEndp;
     u8 enabled;
     u8 status;
-    u8 type;      // 0 - ds3, 1 - ds4, 2 - guitar hero guitar, 3 - rock band guitar
+    u8 type;      // 0=DS3 1=DS4 2=JOYTRON 3=GH 4=RB
     u8 oldled[4]; // rgb for ds4 and blink
     u8 lrum;
     u8 rrum;
