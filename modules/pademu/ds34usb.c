@@ -146,6 +146,19 @@ int usb_connect(int devId)
     } else if (device->idProduct == ROCK_BAND_PS3_PID) {
         ds34pad[pad].type = GUITAR_RB;
         epCount = interface->bNumEndpoints - 1;
+    } else if (
+        (device->idVendor==JOYTRON_VID_DI &&
+         device->idProduct==JOYTRON_PID_DI) ||
+
+        (device->idVendor==JOYTRON_VID_CS &&
+         device->idProduct==JOYTRON_PID_CS) ||
+
+        (device->idVendor==JOYTRON_VID_CS &&
+         device->idProduct==JOYTRON_PID_XI)
+    )
+    {
+    ds34pad[pad].type=JOYTRON;
+    epCount=interface->bNumEndpoints-1;
     } else {
         // [순정 원본 상태 유지] 정품 DS4 뿐만 아니라, 조이트론의 3가지 장치들까지 전부 이 구역(DS4)으로 흡수시킵니다.
         ds34pad[pad].type = DS4;
@@ -262,7 +275,7 @@ static void usb_config_set(int result, int count, void *arg)
         DelayThread(10000);
         led[0] = led_patterns[pad][1];
         led[3] = 0;
-    } else if (ds34pad[pad].type == DS4){
+    } else if(ds34pad[pad].type==DS4 || ds34pad[pad].type==JOYTRON){
         led[0] = rgbled_patterns[pad][1][0];
         led[1] = rgbled_patterns[pad][1][1];
         led[2] = rgbled_patterns[pad][1][2];
@@ -340,8 +353,17 @@ static void readReport(u8 *data, int pad_idx)
                 pad->oldled[3] = 1;
             else
                 pad->oldled[3] = 0;
+        
+        } else if(pad->type==JOYTRON)
+{
+    struct joytron_report *report;
 
-        } else if (pad->type == DS4) {
+    report=(struct joytron_report*)data;
+
+    translate_pad_joytron(report,&pad->ds2);
+
+    padMacroPerform(&pad->ds2,0);
+} else if (pad->type == DS4) {
             struct ds4report *report;
             report = (struct ds4report *)data;
             translate_pad_ds4(report, &pad->ds2, 1);
@@ -411,7 +433,7 @@ static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
         }
 
         ret = UsbControlTransfer(ds34pad[pad].controlEndp, REQ_USB_OUT, USB_REQ_SET_REPORT, (HID_USB_SET_REPORT_OUTPUT << 8) | 0x01, 0, sizeof(output_01_report), usb_buf, usb_cmd_cb, (void *)pad);
-    } else if (ds34pad[pad].type == DS4) {
+    } else if(ds34pad[pad].type==DS4 || ds34pad[pad].type==JOYTRON) {
         usb_buf[0] = 0x05;
         usb_buf[1] = 0xFF;
 
