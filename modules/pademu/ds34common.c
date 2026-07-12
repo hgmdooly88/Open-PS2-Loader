@@ -143,107 +143,73 @@ void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, u8 hav
     out->PressureR2 = in->PressureR2;
 }
 
-void translate_pad_joytron(
-    const uint8_t *in,
-    struct ds4report *out
-)
+void translate_pad_joytron(const struct joytron_report *in, struct ds2report *out)
 {
-    memset(out, 0, sizeof(struct ds4report));
-
-    /*
-     * Joytron HID Report 구조 예:
-     *
-     * byte 0 : report id
-     * byte 1 : buttons
-     * byte 2 : dpad
-     * byte 3 : L1/R1/L2/R2
-     * byte 4 : left stick X
-     * byte 5 : left stick Y
-     * byte 6 : right stick X
-     * byte 7 : right stick Y
-     *
-     * 실제 Joytron 모델별로 다름
-     */
-
-
-    // Left Stick
-    out->lx = in[4];
-    out->ly = in[5];
-
-
-    // Right Stick
-    out->rx = in[6];
-    out->ry = in[7];
-
-
-    // Buttons
-    if(in[1] & 0x01)
-        out->buttons1 |= DS4_BUTTON_SQUARE;
-
-    if(in[1] & 0x02)
-        out->buttons1 |= DS4_BUTTON_CROSS;
-
-    if(in[1] & 0x04)
-        out->buttons1 |= DS4_BUTTON_CIRCLE;
-
-    if(in[1] & 0x08)
-        out->buttons1 |= DS4_BUTTON_TRIANGLE;
-
-
-    // Shoulder
-    if(in[2] & 0x01)
-        out->buttons1 |= DS4_BUTTON_L1;
-
-    if(in[2] & 0x02)
-        out->buttons1 |= DS4_BUTTON_R1;
-
-
-    // D-Pad
-    switch(in[0] & 0x0F)
+    static const u8 dpad_mapping[] =
     {
-        case 0:
-            out->dpad = DS4_DPAD_UP;
-            break;
+        DS2ButtonUp,
+        DS2ButtonUp | DS2ButtonRight,
+        DS2ButtonRight,
+        DS2ButtonDown | DS2ButtonRight,
+        DS2ButtonDown,
+        DS2ButtonDown | DS2ButtonLeft,
+        DS2ButtonLeft,
+        DS2ButtonUp | DS2ButtonLeft,
+        0
+    };
 
-        case 1:
-            out->dpad = DS4_DPAD_UP_RIGHT;
-            break;
+    u8 buttons_low = 0;
+    u8 buttons_high = 0;
 
-        case 2:
-            out->dpad = DS4_DPAD_RIGHT;
-            break;
+    /* ---------- Byte0 ---------- */
 
-        case 3:
-            out->dpad = DS4_DPAD_DOWN_RIGHT;
-            break;
+    if (in->buttons0 & 0x01) buttons_high |= DS2ButtonCross >> 8;
+    if (in->buttons0 & 0x02) buttons_high |= DS2ButtonCircle >> 8;
+    if (in->buttons0 & 0x08) buttons_high |= DS2ButtonSquare >> 8;
+    if (in->buttons0 & 0x10) buttons_high |= DS2ButtonTriangle >> 8;
+    if (in->buttons0 & 0x40) buttons_high |= DS2ButtonL1 >> 8;
+    if (in->buttons0 & 0x80) buttons_high |= DS2ButtonR1 >> 8;
 
-        case 4:
-            out->dpad = DS4_DPAD_DOWN;
-            break;
+    /* ---------- Byte1 ---------- */
 
-        case 5:
-            out->dpad = DS4_DPAD_DOWN_LEFT;
-            break;
+    if (in->buttons1 & 0x01) buttons_high |= DS2ButtonL2 >> 8;
+    if (in->buttons1 & 0x02) buttons_high |= DS2ButtonR2 >> 8;
+    if (in->buttons1 & 0x04) buttons_low  |= DS2ButtonSelect;
+    if (in->buttons1 & 0x10) buttons_low  |= DS2ButtonStart;
 
-        case 6:
-            out->dpad = DS4_DPAD_LEFT;
-            break;
+    /* L3/R3/Home은 아직 미확인 */
 
-        case 7:
-            out->dpad = DS4_DPAD_UP_LEFT;
-            break;
+    /* ---------- DPAD ---------- */
 
-        default:
-            out->dpad = DS4_DPAD_NONE;
-            break;
-    }
+    buttons_low |= dpad_mapping[in->hat & 0x0F];
 
+    /* ---------- Active Low ---------- */
 
-    // Trigger
-    out->l2 = in[8];
-    out->r2 = in[9];
+    out->nButtonStateL = ~buttons_low;
+    out->nButtonStateH = ~buttons_high;
 
+    /* ---------- Analog ---------- */
 
-    // Touchpad / timestamp 등 DS4 기본값
-    out->counter++;
+    out->LeftStickX  = in->lx;
+    out->LeftStickY  = in->ly;
+    out->RightStickX = in->rx;
+    out->RightStickY = in->ry;
+
+    /* ---------- Pressure ---------- */
+
+    out->PressureRight = out->nRight ? 0 : 255;
+    out->PressureLeft  = out->nLeft  ? 0 : 255;
+    out->PressureUp    = out->nUp    ? 0 : 255;
+    out->PressureDown  = out->nDown  ? 0 : 255;
+
+    out->PressureTriangle = (buttons_high & (DS2ButtonTriangle >> 8)) ? 255 : 0;
+    out->PressureCircle   = (buttons_high & (DS2ButtonCircle >> 8))   ? 255 : 0;
+    out->PressureCross    = (buttons_high & (DS2ButtonCross >> 8))    ? 255 : 0;
+    out->PressureSquare   = (buttons_high & (DS2ButtonSquare >> 8))   ? 255 : 0;
+
+    out->PressureL1 = (buttons_high & (DS2ButtonL1 >> 8)) ? 255 : 0;
+    out->PressureR1 = (buttons_high & (DS2ButtonR1 >> 8)) ? 255 : 0;
+
+    out->PressureL2 = in->l2;
+    out->PressureR2 = in->r2;
 }
