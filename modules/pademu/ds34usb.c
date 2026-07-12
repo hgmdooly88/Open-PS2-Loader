@@ -147,6 +147,7 @@ int usb_connect(int devId)
         ds34pad[pad].type = GUITAR_RB;
         epCount = interface->bNumEndpoints - 1;
     } else {
+        // [순정 원본 상태 유지] 정품 DS4 뿐만 아니라, 조이트론의 3가지 장치들까지 전부 이 구역(DS4)으로 흡수시킵니다.
         ds34pad[pad].type = DS4;
         epCount = 20; // ds4 v2 returns interface->bNumEndpoints as 0
     }
