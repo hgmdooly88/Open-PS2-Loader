@@ -299,6 +299,18 @@ static void readReport(u8 *data, int pad_idx)
         translate_pad_guitar(report, &pad->ds2, pad->type == GUITAR_GH);
         padMacroPerform(&pad->ds2, report->PSButton);
     }
+    // OPL 1.2.0 전용: 조이트론 기판이 동결되어 data[0]이 0이 되더라도 강제로 통과시킵니다.
+    if (data[0] || (UsbGetDeviceStaticDescriptor(pad->devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
+                       UsbGetDeviceStaticDescriptor(pad->devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS)) {
+        
+        // 조이트론 스틱인 경우, 멈춰있는 데이터 헤더에 정품 활성화 신호(0x01)를 수동 주입합니다.
+        if (UsbGetDeviceStaticDescriptor(pad->devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_DI || 
+            UsbGetDeviceStaticDescriptor(pad->devId, NULL, USB_DT_DEVICE)->idVendor == JOYTRON_VID_CS) {
+            data[0] = 0x01; 
+        }
+    }
+
+    // 원본 코드의 원래 흐름을 이어가기 위해 if (data[0]) 검사문을 순정 상태 그대로 다시 열어줍니다.
     if (data[0]) {
 
         if (pad->type == DS3) {
