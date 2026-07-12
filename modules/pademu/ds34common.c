@@ -143,4 +143,107 @@ void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, u8 hav
     out->PressureR2 = in->PressureR2;
 }
 
-translate_pad_joytron()
+void translate_pad_joytron(
+    const uint8_t *in,
+    struct ds4report *out
+)
+{
+    memset(out, 0, sizeof(struct ds4report));
+
+    /*
+     * Joytron HID Report 구조 예:
+     *
+     * byte 0 : report id
+     * byte 1 : buttons
+     * byte 2 : dpad
+     * byte 3 : L1/R1/L2/R2
+     * byte 4 : left stick X
+     * byte 5 : left stick Y
+     * byte 6 : right stick X
+     * byte 7 : right stick Y
+     *
+     * 실제 Joytron 모델별로 다름
+     */
+
+
+    // Left Stick
+    out->lx = in[4];
+    out->ly = in[5];
+
+
+    // Right Stick
+    out->rx = in[6];
+    out->ry = in[7];
+
+
+    // Buttons
+    if(in[1] & 0x01)
+        out->buttons1 |= DS4_BUTTON_SQUARE;
+
+    if(in[1] & 0x02)
+        out->buttons1 |= DS4_BUTTON_CROSS;
+
+    if(in[1] & 0x04)
+        out->buttons1 |= DS4_BUTTON_CIRCLE;
+
+    if(in[1] & 0x08)
+        out->buttons1 |= DS4_BUTTON_TRIANGLE;
+
+
+    // Shoulder
+    if(in[2] & 0x01)
+        out->buttons1 |= DS4_BUTTON_L1;
+
+    if(in[2] & 0x02)
+        out->buttons1 |= DS4_BUTTON_R1;
+
+
+    // D-Pad
+    switch(in[0] & 0x0F)
+    {
+        case 0:
+            out->dpad = DS4_DPAD_UP;
+            break;
+
+        case 1:
+            out->dpad = DS4_DPAD_UP_RIGHT;
+            break;
+
+        case 2:
+            out->dpad = DS4_DPAD_RIGHT;
+            break;
+
+        case 3:
+            out->dpad = DS4_DPAD_DOWN_RIGHT;
+            break;
+
+        case 4:
+            out->dpad = DS4_DPAD_DOWN;
+            break;
+
+        case 5:
+            out->dpad = DS4_DPAD_DOWN_LEFT;
+            break;
+
+        case 6:
+            out->dpad = DS4_DPAD_LEFT;
+            break;
+
+        case 7:
+            out->dpad = DS4_DPAD_UP_LEFT;
+            break;
+
+        default:
+            out->dpad = DS4_DPAD_NONE;
+            break;
+    }
+
+
+    // Trigger
+    out->l2 = in[8];
+    out->r2 = in[9];
+
+
+    // Touchpad / timestamp 등 DS4 기본값
+    out->counter++;
+}
