@@ -325,5 +325,4 @@ void translate_pad_guitar(const struct ds3guitarreport *in, struct ds2report *ou
 void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, uint8_t have_touchpad);
 
 void translate_pad_joytron(const struct joytron_report *in, struct ds2report *out);
-
 #endif
