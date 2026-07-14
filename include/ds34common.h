@@ -284,19 +284,20 @@ struct ds4report
 
 struct joytron_report
 {
-    uint8_t buttons0;
-    uint8_t buttons1;
-    uint8_t hat;
+    uint8_t ButtonsL;
+    uint8_t ButtonsH;
+    uint8_t Hat;
 
-    uint8_t lx;
-    uint8_t ly;
-    uint8_t rx;
-    uint8_t ry;
+    uint8_t LeftStickX;
+    uint8_t LeftStickY;
 
-    uint8_t r2;
-    uint8_t l2;
+    uint8_t RightStickX;
+    uint8_t RightStickY;
+
+    uint8_t Brake;
+    uint8_t Accelerator;
+
 } __attribute__((packed));
-
 /**
  * Translate DS3 pad data into DS2 pad data.
  * @param in DS3 report
