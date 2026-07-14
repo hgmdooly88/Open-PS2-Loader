@@ -158,58 +158,50 @@ void translate_pad_joytron(const struct joytron_report *in, struct ds2report *ou
         0
     };
 
-    u8 buttons_low = 0;
-    u8 buttons_high = 0;
+    uint16_t btn =
+        ((uint16_t)in->ButtonsH << 8) |
+        in->ButtonsL;
 
-    /* ---------- Byte0 ---------- */
+    out->nButtonState = 0xFFFF;
 
-    if (in->buttons0 & 0x01) buttons_high |= DS2ButtonCross >> 8;
-    if (in->buttons0 & 0x02) buttons_high |= DS2ButtonCircle >> 8;
-    if (in->buttons0 & 0x08) buttons_high |= DS2ButtonSquare >> 8;
-    if (in->buttons0 & 0x10) buttons_high |= DS2ButtonTriangle >> 8;
-    if (in->buttons0 & 0x40) buttons_high |= DS2ButtonL1 >> 8;
-    if (in->buttons0 & 0x80) buttons_high |= DS2ButtonR1 >> 8;
+    if(btn & 0x0001) out->nCross=0;
+    if(btn & 0x0002) out->nCircle=0;
+    if(btn & 0x0008) out->nSquare=0;
+    if(btn & 0x0010) out->nTriangle=0;
 
-    /* ---------- Byte1 ---------- */
+    if(btn & 0x0040) out->nL1=0;
+    if(btn & 0x0080) out->nR1=0;
 
-    if (in->buttons1 & 0x01) buttons_high |= DS2ButtonL2 >> 8;
-    if (in->buttons1 & 0x02) buttons_high |= DS2ButtonR2 >> 8;
-    if (in->buttons1 & 0x04) buttons_low  |= DS2ButtonSelect;
-    if (in->buttons1 & 0x10) buttons_low  |= DS2ButtonStart;
+    if(btn & 0x0100) out->nL2=0;
+    if(btn & 0x0200) out->nR2=0;
 
-    /* L3/R3/Home은 아직 미확인 */
+    if(btn & 0x0400) out->nSelect=0;
+    if(btn & 0x1000) out->nStart=0;
 
-    /* ---------- DPAD ---------- */
+    uint8_t hat=in->Hat;
 
-    buttons_low |= dpad_mapping[in->hat & 0x0F];
+    if(hat<8)
+        out->nButtonState &= ~(dpad_mapping[hat]);
 
-    /* ---------- Active Low ---------- */
+    out->LeftStickX=in->LeftStickX;
+    out->LeftStickY=in->LeftStickY;
 
-    out->nButtonStateL = ~buttons_low;
-    out->nButtonStateH = ~buttons_high;
+    out->RightStickX=in->RightStickX;
+    out->RightStickY=in->RightStickY;
 
-    /* ---------- Analog ---------- */
+    out->PressureCross=out->nCross?0:255;
+    out->PressureCircle=out->nCircle?0:255;
+    out->PressureSquare=out->nSquare?0:255;
+    out->PressureTriangle=out->nTriangle?0:255;
 
-    out->LeftStickX  = in->lx;
-    out->LeftStickY  = in->ly;
-    out->RightStickX = in->rx;
-    out->RightStickY = in->ry;
+    out->PressureL1=out->nL1?0:255;
+    out->PressureR1=out->nR1?0:255;
 
-    /* ---------- Pressure ---------- */
+    out->PressureL2=in->Brake;
+    out->PressureR2=in->Accelerator;
 
-    out->PressureRight = out->nRight ? 0 : 255;
-    out->PressureLeft  = out->nLeft  ? 0 : 255;
-    out->PressureUp    = out->nUp    ? 0 : 255;
-    out->PressureDown  = out->nDown  ? 0 : 255;
-
-    out->PressureTriangle = (buttons_high & (DS2ButtonTriangle >> 8)) ? 255 : 0;
-    out->PressureCircle   = (buttons_high & (DS2ButtonCircle >> 8))   ? 255 : 0;
-    out->PressureCross    = (buttons_high & (DS2ButtonCross >> 8))    ? 255 : 0;
-    out->PressureSquare   = (buttons_high & (DS2ButtonSquare >> 8))   ? 255 : 0;
-
-    out->PressureL1 = (buttons_high & (DS2ButtonL1 >> 8)) ? 255 : 0;
-    out->PressureR1 = (buttons_high & (DS2ButtonR1 >> 8)) ? 255 : 0;
-
-    out->PressureL2 = in->l2;
-    out->PressureR2 = in->r2;
+    out->PressureUp=out->nUp?0:255;
+    out->PressureDown=out->nDown?0:255;
+    out->PressureLeft=out->nLeft?0:255;
+    out->PressureRight=out->nRight?0:255;
 }
