@@ -26,6 +26,8 @@
 #define JOYTRON_PID_CS     0x181C  // 콘솔 모드 제품 ID
 #define JOYTRON_PID_XI     0x18A1  // XINPUT 모드 제품 ID
 
+#define JOYTRON_TYPE 4
+
 static u8 output_01_report[] =
     {
         0x00,
@@ -159,10 +161,14 @@ int usb_connect(int devId)
     {
     ds34pad[pad].type=JOYTRON;
     epCount=interface->bNumEndpoints-1;
-    } else {
-        // [순정 원본 상태 유지] 정품 DS4 뿐만 아니라, 조이트론의 3가지 장치들까지 전부 이 구역(DS4)으로 흡수시킵니다.
+    } else if (device->idVendor == JOYTRON_VID_CS)
+    {
+        ds34pad[pad].type = JOYTRON_TYPE;
+        epCount = interface->bNumEndpoints - 1;
+    } else 
+    {
         ds34pad[pad].type = DS4;
-        epCount = 20; // ds4 v2 returns interface->bNumEndpoints as 0
+        epCount = 20;
     }
 
     endpoint = (UsbEndpointDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_ENDPOINT);
@@ -404,6 +410,24 @@ static void readReport(u8 *data, int pad_idx)
             pad->update_rum = 1;
         }
     }
+} else if (pad->type == JOYTRON_TYPE)
+{
+    struct joytron_report report;
+
+    report.Buttons1 = data[0];
+    report.Buttons2 = data[1];
+    report.Hat      = data[2];
+    report.LX       = data[3];
+    report.LY       = data[4];
+    report.RX       = data[5];
+    report.RY       = data[6];
+    report.TriggerR = data[7];
+    report.TriggerL = data[8];
+
+    translate_pad_joytron(&report,&pad->ds2);
+
+    pad->data[0]=pad->ds2.nButtonStateL;
+    pad->data[1]=pad->ds2.nButtonStateH;
 }
 
 static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
@@ -433,7 +457,7 @@ static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
         }
 
         ret = UsbControlTransfer(ds34pad[pad].controlEndp, REQ_USB_OUT, USB_REQ_SET_REPORT, (HID_USB_SET_REPORT_OUTPUT << 8) | 0x01, 0, sizeof(output_01_report), usb_buf, usb_cmd_cb, (void *)pad);
-    } else if(ds34pad[pad].type==DS4 || ds34pad[pad].type==JOYTRON) {
+    } else if(ds34pad[pad].type==DS4) {
         usb_buf[0] = 0x05;
         usb_buf[1] = 0xFF;
 
@@ -451,6 +475,9 @@ static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
         }
 
         ret = UsbInterruptTransfer(ds34pad[pad].outEndp, usb_buf, 32, usb_cmd_cb, (void *)pad);
+    } else if (ds34pad[pad].type == JOYTRON_TYPE)
+    {
+        return 0;
     }
 
     ds34pad[pad].oldled[0] = led[0];
