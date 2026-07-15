@@ -19,15 +19,6 @@
 
 #define MAX_PADS 4
 
-// 조이트론 스틱 3가지 모드 전체 ID 정의
-#define JOYTRON_VID_DI     0x20BC  // DINPUT 제조사 ID
-#define JOYTRON_PID_DI     0x5501  // DINPUT 제품 ID
-#define JOYTRON_VID_CS     0x0079  // 콘솔/XINPUT 제조사 ID
-#define JOYTRON_PID_CS     0x181C  // 콘솔 모드 제품 ID
-#define JOYTRON_PID_XI     0x18A1  // XINPUT 모드 제품 ID
-
-#define JOYTRON_TYPE 4
-
 static u8 output_01_report[] =
     {
         0x00,
@@ -98,11 +89,6 @@ int usb_probe(int devId)
 
     if (device->idVendor == DS34_VID && (device->idProduct == DS3_PID || device->idProduct == DS4_PID || device->idProduct == DS4_PID_SLIM))
         return 1;
-    
-    // 조이트론 3가지 모드 전체 검사 조건 수용
-    if (device->idVendor == JOYTRON_VID_DI && device->idProduct == JOYTRON_PID_DI) return 1;
-    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_CS) return 1;
-    if (device->idVendor == JOYTRON_VID_CS && device->idProduct == JOYTRON_PID_XI) return 1;
 
     return 0;
 }
@@ -148,27 +134,9 @@ int usb_connect(int devId)
     } else if (device->idProduct == ROCK_BAND_PS3_PID) {
         ds34pad[pad].type = GUITAR_RB;
         epCount = interface->bNumEndpoints - 1;
-    } else if (
-        (device->idVendor==JOYTRON_VID_DI &&
-         device->idProduct==JOYTRON_PID_DI) ||
-
-        (device->idVendor==JOYTRON_VID_CS &&
-         device->idProduct==JOYTRON_PID_CS) ||
-
-        (device->idVendor==JOYTRON_VID_CS &&
-         device->idProduct==JOYTRON_PID_XI)
-    )
-    {
-    ds34pad[pad].type=JOYTRON;
-    epCount=interface->bNumEndpoints-1;
-    } else if (device->idVendor == JOYTRON_VID_CS)
-    {
-        ds34pad[pad].type = JOYTRON_TYPE;
-        epCount = interface->bNumEndpoints - 1;
-    } else 
-    {
+    } else {
         ds34pad[pad].type = DS4;
-        epCount = 20;
+        epCount = 20; // ds4 v2 returns interface->bNumEndpoints as 0
     }
 
     endpoint = (UsbEndpointDescriptor *)UsbGetDeviceStaticDescriptor(devId, NULL, USB_DT_ENDPOINT);
@@ -189,16 +157,9 @@ int usb_connect(int devId)
 
     } while (epCount--);
 
-    // 만약 조이트론 스틱 모드라면, 원본 드라이버의 엄격한 엔드포인트 주소 검사 오류를 우회하여 강제로 전원을 켭니다.
-    if (device->idVendor == JOYTRON_VID_DI || device->idVendor == JOYTRON_VID_CS) {
-        if (ds34pad[pad].interruptEndp < 0) ds34pad[pad].interruptEndp = 1;
-        if (ds34pad[pad].outEndp < 0) ds34pad[pad].outEndp = 2;
-    } else {
-        // 정품 패드들은 기존 원본 방식 그대로 엄격하게 검사하여 통과시킵니다.
-        if (ds34pad[pad].interruptEndp < 0 || ds34pad[pad].outEndp < 0) {
-            usb_release(pad);
-            return 1;
-        }
+    if (ds34pad[pad].interruptEndp < 0 || ds34pad[pad].outEndp < 0) {
+        usb_release(pad);
+        return 1;
     }
 
     ds34pad[pad].status |= DS34USB_STATE_CONNECTED;
@@ -281,7 +242,7 @@ static void usb_config_set(int result, int count, void *arg)
         DelayThread(10000);
         led[0] = led_patterns[pad][1];
         led[3] = 0;
-    } else if(ds34pad[pad].type==DS4 || ds34pad[pad].type==JOYTRON){
+    } else if (ds34pad[pad].type == DS4) {
         led[0] = rgbled_patterns[pad][1][0];
         led[1] = rgbled_patterns[pad][1][1];
         led[2] = rgbled_patterns[pad][1][2];
@@ -318,8 +279,7 @@ static void readReport(u8 *data, int pad_idx)
         translate_pad_guitar(report, &pad->ds2, pad->type == GUITAR_GH);
         padMacroPerform(&pad->ds2, report->PSButton);
     }
-
-    if (data) {
+    if (data[0]) {
 
         if (pad->type == DS3) {
             struct ds3report *report;
@@ -359,17 +319,8 @@ static void readReport(u8 *data, int pad_idx)
                 pad->oldled[3] = 1;
             else
                 pad->oldled[3] = 0;
-        
-        } else if(pad->type==JOYTRON)
-{
-    struct joytron_report *report;
 
-    report=(struct joytron_report*)data;
-
-    translate_pad_joytron(report,&pad->ds2);
-
-    padMacroPerform(&pad->ds2,0);
-} else if (pad->type == DS4) {
+        } else if (pad->type == DS4) {
             struct ds4report *report;
             report = (struct ds4report *)data;
             translate_pad_ds4(report, &pad->ds2, 1);
@@ -410,24 +361,6 @@ static void readReport(u8 *data, int pad_idx)
             pad->update_rum = 1;
         }
     }
-} else if (pad->type == JOYTRON_TYPE)
-{
-    struct joytron_report report;
-
-    report.Buttons1 = data[0];
-    report.Buttons2 = data[1];
-    report.Hat      = data[2];
-    report.LX       = data[3];
-    report.LY       = data[4];
-    report.RX       = data[5];
-    report.RY       = data[6];
-    report.TriggerR = data[7];
-    report.TriggerL = data[8];
-
-    translate_pad_joytron(&report,&pad->ds2);
-
-    pad->data[0]=pad->ds2.nButtonStateL;
-    pad->data[1]=pad->ds2.nButtonStateH;
 }
 
 static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
@@ -457,7 +390,7 @@ static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
         }
 
         ret = UsbControlTransfer(ds34pad[pad].controlEndp, REQ_USB_OUT, USB_REQ_SET_REPORT, (HID_USB_SET_REPORT_OUTPUT << 8) | 0x01, 0, sizeof(output_01_report), usb_buf, usb_cmd_cb, (void *)pad);
-    } else if(ds34pad[pad].type==DS4) {
+    } else if (ds34pad[pad].type == DS4) {
         usb_buf[0] = 0x05;
         usb_buf[1] = 0xFF;
 
@@ -475,9 +408,6 @@ static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
         }
 
         ret = UsbInterruptTransfer(ds34pad[pad].outEndp, usb_buf, 32, usb_cmd_cb, (void *)pad);
-    } else if (ds34pad[pad].type == JOYTRON_TYPE)
-    {
-        return 0;
     }
 
     ds34pad[pad].oldled[0] = led[0];
