@@ -282,22 +282,6 @@ struct ds4report
 
 } __attribute__((packed));
 
-struct joytron_report
-{
-    uint8_t ButtonsL;
-    uint8_t ButtonsH;
-    uint8_t Hat;
-
-    uint8_t LeftStickX;
-    uint8_t LeftStickY;
-
-    uint8_t RightStickX;
-    uint8_t RightStickY;
-
-    uint8_t Brake;
-    uint8_t Accelerator;
-
-} __attribute__((packed));
 /**
  * Translate DS3 pad data into DS2 pad data.
  * @param in DS3 report
@@ -324,5 +308,4 @@ void translate_pad_guitar(const struct ds3guitarreport *in, struct ds2report *ou
  */
 void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, uint8_t have_touchpad);
 
-void translate_pad_joytron(const struct joytron_report *in, struct ds2report *out);
 #endif
