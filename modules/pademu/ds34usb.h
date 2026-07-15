@@ -9,6 +9,7 @@
 #define DS4       1
 #define GUITAR_GH 2
 #define GUITAR_RB 3
+#define JOYTRON   4 // 추가
 
 #define MODEL_GUITAR 1
 #define MODEL_PS2    3
