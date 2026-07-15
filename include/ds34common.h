@@ -282,6 +282,22 @@ struct ds4report
 
 } __attribute__((packed));
 
+
+struct joytron_report // 조이트론 구조체 추가
+{
+    u8 Buttons1;
+    u8 Buttons2;
+    u8 Hat;
+
+    u8 LX;
+    u8 LY;
+    u8 RX;
+    u8 RY;
+
+    u8 Reserved1;
+    u8 Reserved2;
+} __attribute__((packed));
+
 /**
  * Translate DS3 pad data into DS2 pad data.
  * @param in DS3 report
@@ -307,5 +323,7 @@ void translate_pad_guitar(const struct ds3guitarreport *in, struct ds2report *ou
  * NOTE: if set to 1, ds4report must be large enough for that data to be read!
  */
 void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, uint8_t have_touchpad);
+
+void translate_pad_joytron(const struct joytron_report *in, struct ds2report *out); // 조이트론 패드 변환 함수 추가
 
 #endif
