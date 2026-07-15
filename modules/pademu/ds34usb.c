@@ -17,6 +17,9 @@
 #define REQ_USB_OUT (USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE)
 #define REQ_USB_IN  (USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE)
 
+#define JOYTRON_VID 0x0079
+#define JOYTRON_PID 0x181C
+
 #define MAX_PADS 4
 
 static u8 output_01_report[] =
@@ -89,7 +92,8 @@ int usb_probe(int devId)
 
     if (device->idVendor == DS34_VID && (device->idProduct == DS3_PID || device->idProduct == DS4_PID || device->idProduct == DS4_PID_SLIM))
         return 1;
-
+    if (device->idVendor == JOYTRON_VID && device->idProduct==JOYTRON_PID) // 추가
+        return 1;
     return 0;
 }
 
@@ -134,8 +138,11 @@ int usb_connect(int devId)
     } else if (device->idProduct == ROCK_BAND_PS3_PID) {
         ds34pad[pad].type = GUITAR_RB;
         epCount = interface->bNumEndpoints - 1;
+    } else if(device->idVendor==JOYTRON_VID) {
+        ds34pad[pad].type=JOYTRON;
+        epCount=interface->bNumEndpoints-1;
     } else {
-        ds34pad[pad].type = DS4;
+        ds34pad[pad].type=DS4;    
         epCount = 20; // ds4 v2 returns interface->bNumEndpoints as 0
     }
 
@@ -247,6 +254,11 @@ static void usb_config_set(int result, int count, void *arg)
         led[1] = rgbled_patterns[pad][1][1];
         led[2] = rgbled_patterns[pad][1][2];
         led[3] = 0;
+    } else if(ds34pad[pad].type==JOYTRON) {
+        led[0]=0;
+        led[1]=0;
+        led[2]=0;
+        led[3]=0;
     }
 
     LEDRumble(led, 0, 0, pad);
@@ -320,6 +332,11 @@ static void readReport(u8 *data, int pad_idx)
             else
                 pad->oldled[3] = 0;
 
+        } else if(pad->type==JOYTRON) {
+            struct joytron_report *report;
+            report=(struct joytron_report*)data;
+            translate_pad_joytron(report,&pad->ds2);
+            padMacroPerform(&pad->ds2,0);
         } else if (pad->type == DS4) {
             struct ds4report *report;
             report = (struct ds4report *)data;
@@ -390,6 +407,8 @@ static int LEDRumble(u8 *led, u8 lrum, u8 rrum, int pad)
         }
 
         ret = UsbControlTransfer(ds34pad[pad].controlEndp, REQ_USB_OUT, USB_REQ_SET_REPORT, (HID_USB_SET_REPORT_OUTPUT << 8) | 0x01, 0, sizeof(output_01_report), usb_buf, usb_cmd_cb, (void *)pad);
+    } else if(ds34pad[pad].type==JOYTRON) {
+        return USB_RC_OK;
     } else if (ds34pad[pad].type == DS4) {
         usb_buf[0] = 0x05;
         usb_buf[1] = 0xFF;
