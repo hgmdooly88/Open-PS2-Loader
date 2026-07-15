@@ -142,3 +142,66 @@ void translate_pad_ds4(const struct ds4report *in, struct ds2report *out, u8 hav
     out->PressureL2 = in->PressureL2;
     out->PressureR2 = in->PressureR2;
 }
+
+//* 조이트론 변환 함수 
+void translate_pad_joytron(
+    const struct joytron_report *in,
+    struct ds2report *out)
+{
+    static const u8 dpad_map[] =
+    {
+        DS2ButtonUp,
+        DS2ButtonUp|DS2ButtonRight,
+        DS2ButtonRight,
+        DS2ButtonDown|DS2ButtonRight,
+        DS2ButtonDown,
+        DS2ButtonDown|DS2ButtonLeft,
+        DS2ButtonLeft,
+        DS2ButtonUp|DS2ButtonLeft,
+        0
+    };
+
+    u8 dpad=in->Hat;
+
+    if(dpad>8)
+        dpad=8;
+
+    out->nButtonStateL=0xff;
+    out->nButtonStateH=0xff;
+
+    out->nButtonStateL&=~dpad_map[dpad];
+
+    if(in->Buttons2&0x04) out->nButtonStateL&=~DS2ButtonSelect;
+    if(in->Buttons2&0x10) out->nButtonStateL&=~DS2ButtonStart;
+
+    if(in->Buttons2&0x01) out->nButtonStateH&=~DS2ButtonL2;
+    if(in->Buttons2&0x02) out->nButtonStateH&=~DS2ButtonR2;
+
+    if(in->Buttons1&0x40) out->nButtonStateH&=~DS2ButtonL1;
+    if(in->Buttons1&0x80) out->nButtonStateH&=~DS2ButtonR1;
+
+    if(in->Buttons1&0x10) out->nButtonStateH&=~DS2ButtonTriangle;
+    if(in->Buttons1&0x02) out->nButtonStateH&=~DS2ButtonCircle;
+    if(in->Buttons1&0x01) out->nButtonStateH&=~DS2ButtonCross;
+    if(in->Buttons1&0x08) out->nButtonStateH&=~DS2ButtonSquare;
+
+    out->LeftStickX=in->LX;
+    out->LeftStickY=in->LY;
+    out->RightStickX=in->RX;
+    out->RightStickY=in->RY;
+
+    out->PressureRight=out->nRight?0:255;
+    out->PressureLeft=out->nLeft?0:255;
+    out->PressureUp=out->nUp?0:255;
+    out->PressureDown=out->nDown?0:255;
+
+    out->PressureTriangle=out->nTriangle?0:255;
+    out->PressureCircle=out->nCircle?0:255;
+    out->PressureCross=out->nCross?0:255;
+    out->PressureSquare=out->nSquare?0:255;
+
+    out->PressureL1=out->nL1?0:255;
+    out->PressureR1=out->nR1?0:255;
+    out->PressureL2=out->nL2?0:255;
+    out->PressureR2=out->nR2?0:255;
+}
